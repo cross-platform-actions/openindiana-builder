@@ -1,0 +1,92 @@
+name: Build VM Disk Image
+
+env:
+  PACKER_VERSION: '1.14.2'
+
+on:
+  push:
+    branches: '*'
+    tags: 'v*'
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: ${{ matrix.version }}, ${{ matrix.architecture.name }}
+    runs-on: ubuntu-latest
+    strategy:
+        matrix:
+          version:
+            - 2026.10.30
+
+          architecture:
+            - name: x86-64
+              qemu: x86
+              qemu_executable: x86_64
+
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update && \
+          sudo apt install -y \
+          curl \
+          qemu-system-${{ matrix.architecture.qemu }} \
+          qemu-utils \
+          zstd
+
+      # The installer is driven with fixed delays, which are only long enough
+      # with hardware acceleration.
+      - name: Set permissions to allow using KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Print QEMU version
+        run: '"qemu-system-${{ matrix.architecture.qemu_executable }}" --version'
+
+      - uses: hashicorp/setup-packer@v3.4.0
+        with:
+          version: ${{ env.PACKER_VERSION }}
+
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+      #   with:
+      #     limit-access-to-actor: true
+
+      - name: Build Image
+        run: |
+          PACKER_LOG=1 ./build.sh \
+            '${{ matrix.version }}' \
+            '${{ matrix.architecture.name }}' \
+            -var 'headless=true'
+
+      - name: Create Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_ref_name: ${{ github.ref_name }}
+        run: |
+          version="${github_ref_name#v}"
+
+          # Matrix jobs run in parallel; the first to arrive creates the
+          # draft release, the rest upload their artifacts to it.
+          # (gh release create with --draft does not deduplicate by tag.)
+          if gh release view "$github_ref_name" >/dev/null 2>&1; then
+            gh release upload "$github_ref_name" output/* --clobber
+          else
+            sed -n "/^## \[${version}\]/,/^## \[/{/^## \[${version}\]/d;/^## \[/d;p;}" changelog.md \
+              | gh release create \
+                "$github_ref_name" \
+                --title "OpenIndiana ${version}" \
+                --draft \
+                --notes-file - \
+                output/*
+          fi
