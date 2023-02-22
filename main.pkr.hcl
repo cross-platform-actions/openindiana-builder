@@ -108,7 +108,53 @@ source "qemu" "qemu" {
   boot_wait = "5s"
 
   boot_steps = [
-    []
+    ["1<wait5m>", "Boot Multi User"],
+    ["<enter><wait10s>", "To select the keyboard layout, enter a number [default 47]:"],
+    ["<enter><wait10s>", "To select the language you wish to use, enter a number [default is 1]:"],
+    ["1<enter><wait20s>", "Install OpenIndiana"],
+
+    // Welcome to OpenIndiana
+    ["<f2><wait>", "Continue"],
+
+    // Where should OpenIndiana be installed?
+    ["<f2><wait>", "Continue"],
+
+    // You have chosen a GPT labeled disk. Installing onto a GPT labeled disk
+    // will cause the loss of all existing data
+    ["<left>", "move to Continue"],
+    ["<enter><wait>", "Continue"],
+
+    // Fdisk Partitions
+    ["<f2><wait>", "Use the whole disk (EFI) - Continue"],
+
+    // Network - Select how the wired ethernet network connection is configured
+    ["<down>", "Automatically"],
+    ["<f2><wait>", "Continue"],
+
+    // Select the region that contains your time zone
+    ["<f2><wait>", "Continue"],
+
+    // Date and Time
+    ["<f2><wait>", "Continue"],
+
+    // Users
+    // System Root Password
+    [var.root_password, "Root password"],
+    ["<down>"],
+    [var.root_password, "Confirm password"],
+    ["<down>"],
+
+    // Create a user account
+    ["<down>", "Your real name"],
+    [var.secondary_user_username, "Username"],
+    ["<down>"],
+    [var.secondary_user_password, "User password"],
+    ["<down>"],
+    [var.secondary_user_password, "Confirm password"],
+    ["<f2><wait>", "Continue"],
+
+    // Install Summary
+    ["<f2><wait25m>", "Install"],
   ]
 
   ssh_username = "root"
