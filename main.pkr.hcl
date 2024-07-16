@@ -10,7 +10,7 @@ variable "architecture" {
 }
 
 variable "machine_type" {
-  default = "q35"
+  default = "pc"
   type = string
   description = "The type of machine to use when building"
 }
@@ -28,7 +28,7 @@ variable "memory" {
 }
 
 variable "cpus" {
-  default = 2
+  default = 4
   type = number
   description = "The number of cpus to use when building the VM"
 }
@@ -104,14 +104,15 @@ source "qemu" "qemu" {
   use_default_display = var.use_default_display
   display = var.display
   accelerator = var.accelerator
+  firmware = "uefi.fd"
 
   boot_wait = "5s"
 
   boot_steps = [
-    ["1<wait5m>", "Boot Multi User"],
-    ["<enter><wait10s>", "To select the keyboard layout, enter a number [default 47]:"],
-    ["<enter><wait10s>", "To select the language you wish to use, enter a number [default is 1]:"],
-    ["1<enter><wait20s>", "Install OpenIndiana"],
+    ["1<wait2m30s>", "Boot Multi User"],
+    ["<enter><wait5s>", "To select the keyboard layout, enter a number [default 47]:"],
+    ["<enter><wait2m20s>", "To select the language you wish to use, enter a number [default is 1]:"],
+    ["1<enter><wait30s>", "Install OpenIndiana"],
 
     // Welcome to OpenIndiana
     ["<f2><wait>", "Continue"],
@@ -121,7 +122,7 @@ source "qemu" "qemu" {
 
     // You have chosen a GPT labeled disk. Installing onto a GPT labeled disk
     // will cause the loss of all existing data
-    ["<left>", "move to Continue"],
+    ["<right>", "move to Continue"],
     ["<enter><wait>", "Continue"],
 
     // Fdisk Partitions
@@ -155,6 +156,9 @@ source "qemu" "qemu" {
 
     // Install Summary
     ["<f2><wait25m>", "Install"],
+
+    // Welcome to OpenIndiana installation menu
+    ["3<enter><wait5s>", "Shell"],
   ]
 
   ssh_username = "root"
@@ -163,6 +167,7 @@ source "qemu" "qemu" {
 
   qemuargs = [
     ["-cpu", var.cpu_type],
+    ["-boot", "strict=off"],
     ["-monitor", "none"]
   ]
 
