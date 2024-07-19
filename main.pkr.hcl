@@ -111,7 +111,7 @@ source "qemu" "qemu" {
   boot_steps = [
     ["1<wait2m30s>", "Boot Multi User"],
     ["<enter><wait5s>", "To select the keyboard layout, enter a number [default 47]:"],
-    ["<enter><wait2m20s>", "To select the language you wish to use, enter a number [default is 1]:"],
+    ["<enter><wait5m>", "To select the language you wish to use, enter a number [default is 1]:"],
     ["1<enter><wait30s>", "Install OpenIndiana"],
 
     // Welcome to OpenIndiana
@@ -123,7 +123,7 @@ source "qemu" "qemu" {
     // You have chosen a GPT labeled disk. Installing onto a GPT labeled disk
     // will cause the loss of all existing data
     ["<right>", "move to Continue"],
-    ["<enter><wait>", "Continue"],
+    ["<enter><wait5s>", "Continue"],
 
     // Fdisk Partitions
     ["<f2><wait>", "Use the whole disk (EFI) - Continue"],
@@ -157,8 +157,18 @@ source "qemu" "qemu" {
     // Install Summary
     ["<f2><wait25m>", "Install"],
 
+    // Installation Compelte
+    ["<f9><wait5s>", "Quit"],
+
     // Welcome to OpenIndiana installation menu
     ["3<enter><wait5s>", "Shell"],
+
+    // shell
+    ["curl -o /tmp/post_install.sh http://{{.HTTPIP}}:{{.HTTPPort}}/resources/post_install.sh<enter><wait10>"],
+    ["sh /tmp/post_install.sh && exit<enter><wait5>"],
+
+    // Welcome to OpenIndiana installation menu
+    ["5<enter>", "Reboot"],
   ]
 
   ssh_username = "root"
