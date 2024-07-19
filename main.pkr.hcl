@@ -78,12 +78,6 @@ variable "display" {
   description = "What QEMU -display option to use"
 }
 
-variable "accelerator" {
-  default = "tcg"
-  type = string
-  description = "The accelerator type to use when running the VM"
-}
-
 locals {
   iso_os_version = replace(var.os_version, ".", "")
   vm_name = "openindiana-${var.os_version}-${var.architecture}.qcow2"
@@ -103,7 +97,7 @@ source "qemu" "qemu" {
   headless = var.headless
   use_default_display = var.use_default_display
   display = var.display
-  accelerator = var.accelerator
+  accelerator = "none"
   firmware = "uefi.fd"
 
   boot_wait = "5s"
@@ -178,7 +172,10 @@ source "qemu" "qemu" {
   qemuargs = [
     ["-cpu", var.cpu_type],
     ["-boot", "strict=off"],
-    ["-monitor", "none"]
+    ["-monitor", "none"],
+    ["-accel", "kvm"],
+    ["-accel", "hvf"],
+    ["-accel", "tcg"]
   ]
 
   iso_checksum = var.checksum
