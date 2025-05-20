@@ -80,6 +80,11 @@ variable "display" {
 
 locals {
   iso_os_version = replace(var.os_version, ".", "")
+  iso_target_extension = "iso"
+  iso_target_path = "packer_cache"
+  iso_full_target_path = "${local.iso_target_path}/${sha1(var.checksum)}.${local.iso_target_extension}"
+
+  image = "OI-hipster-minimal-${local.iso_os_version}.${local.iso_target_extension}"
   vm_name = "openindiana-${var.os_version}-${var.architecture}.qcow2"
 }
 
@@ -109,7 +114,7 @@ source "qemu" "qemu" {
     ["1<enter><wait30s>", "Install OpenIndiana"],
 
     // Welcome to OpenIndiana
-    ["<f2><wait>", "Continue"],
+    ["<f2><wait10s>", "Continue"],
 
     // Where should OpenIndiana be installed?
     ["<f2><wait>", "Continue"],
@@ -149,7 +154,7 @@ source "qemu" "qemu" {
     ["<f2><wait>", "Continue"],
 
     // Install Summary
-    ["<f2><wait25m>", "Install"],
+    ["<f2><wait30m>", "Install"], # try 25m
 
     // Installation Compelte
     ["<f9><wait5s>", "Quit"],
@@ -175,12 +180,20 @@ source "qemu" "qemu" {
     ["-monitor", "none"],
     ["-accel", "kvm"],
     ["-accel", "hvf"],
-    ["-accel", "tcg"]
+    ["-accel", "tcg"],
+    ["-device", "virtio-scsi-pci"],
+    ["-device", "virtio-blk,drive=drive0,bootindex=0"],
+    ["-device", "ide-cd,drive=drive1,bootindex=1"],
+    ["-drive", "if=none,file={{ .OutputDir }}/{{ .Name }},id=drive0,cache=writeback,discard=ignore,format=qcow2"],
+    ["-drive", "if=none,file=${local.iso_full_target_path},id=drive1,media=disk,format=raw,readonly=on"]
   ]
 
   iso_checksum = var.checksum
+  iso_target_extension = local.iso_target_extension
+  iso_target_path = local.iso_target_path
   iso_urls = [
-    "https://dlc.openindiana.org/isos/hipster/${local.iso_os_version}/OI-hipster-minimal-${local.iso_os_version}.iso"
+    "https://mirrors.dotsrc.org/openindiana/isos/hipster/${local.iso_os_version}/${local.image}",
+    "https://dlc.openindiana.org/isos/hipster/${local.iso_os_version}/${local.image}"
   ]
 
   http_directory = "."
@@ -201,10 +214,10 @@ packer {
 build {
   sources = ["qemu.qemu"]
 
-  provisioner "shell" {
+  /*provisioner "shell" {
     script = "resources/provision.sh"
     environment_vars = [
       "SECONDARY_USER=${var.secondary_user_username}"
     ]
-  }
+  }*/
 }
