@@ -78,6 +78,12 @@ variable "display" {
   description = "What QEMU -display option to use"
 }
 
+variable "acceleration" {
+  default = true
+  description = "Indicates if hardware acceleration should be enabled or not"
+}
+
+
 locals {
   iso_os_version = replace(var.os_version, ".", "")
   iso_target_extension = "iso"
