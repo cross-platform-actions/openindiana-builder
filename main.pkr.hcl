@@ -83,7 +83,6 @@ variable "acceleration" {
   description = "Indicates if hardware acceleration should be enabled or not"
 }
 
-
 locals {
   iso_os_version = replace(var.os_version, ".", "")
   iso_target_extension = "iso"
