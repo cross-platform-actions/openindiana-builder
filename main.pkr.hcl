@@ -115,7 +115,7 @@ source "qemu" "qemu" {
   boot_steps = [
     ["1<wait1m>", "Boot Multi User"],
     ["<enter><wait5s>", "To select the keyboard layout, enter a number [default 47]:"],
-    ["<enter><wait2m>", "To select the language you wish to use, enter a number [default is 1]:"],
+    ["<enter><wait2m30s>", "To select the language you wish to use, enter a number [default is 1]:"],
     ["1<enter><wait30s>", "Install OpenIndiana"],
 
     // Welcome to OpenIndiana
