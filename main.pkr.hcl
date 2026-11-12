@@ -78,6 +78,17 @@ variable "display" {
   description = "What QEMU -display option to use"
 }
 
+variable "qmp_socket" {
+  default = ""
+  type = string
+  description = "Path of a QMP socket to expose, for tools that drive the build interactively"
+}
+
+variable "firmware" {
+  type = string
+  description = "The UEFI firmware file to be used by QEMU"
+}
+
 variable "acceleration" {
   default = true
   description = "Indicates if hardware acceleration should be enabled or not"
@@ -108,71 +119,46 @@ source "qemu" "qemu" {
   use_default_display = var.use_default_display
   display = var.display
   accelerator = "none"
-  firmware = "uefi.fd"
+  firmware = var.firmware
 
   boot_wait = "5s"
 
   boot_steps = [
-    ["1<wait1m>", "Boot Multi User"],
-    ["<enter><wait5s>", "To select the keyboard layout, enter a number [default 47]:"],
-    ["<enter><wait2m30s>", "To select the language you wish to use, enter a number [default is 1]:"],
+    ["1<wait2m>", "Boot Multi User"],
+    ["<enter><wait1m30s>", "Select keyboard layout"],
+    ["<enter><wait2m30s>", "Select language"],
     ["1<enter><wait30s>", "Install OpenIndiana"],
 
-    // Welcome to OpenIndiana
-    ["<f2><wait10s>", "Continue"],
-
-    // Where should OpenIndiana be installed?
-    ["<f2><wait>", "Continue"],
-
-    // You have chosen a GPT labeled disk. Installing onto a GPT labeled disk
-    // will cause the loss of all existing data
-    ["<right>", "move to Continue"],
-    ["<enter><wait5s>", "Continue"],
-
-    // Fdisk Partitions
+    ["<f2><wait10s>", "Welcome to OpenIndiana - Continue"],
+    ["<f2><wait>", "Where should OpenIndiana be installed - Continue"],
+    ["<right>", "GPT disk warning - move to Continue"],
+    ["<enter><wait5s>", "GPT disk warning - Continue"],
     ["<f2><wait>", "Use the whole disk (EFI) - Continue"],
 
-    // Network - Select how the wired ethernet network connection is configured
-    ["<down>", "Automatically"],
-    ["<f2><wait>", "Continue"],
+    ["<down>", "Network - Automatically"],
+    ["<f2><wait>", "Network - Continue"],
+    ["<f2><wait>", "Time zone region - Continue"],
+    ["<f2><wait>", "Date and time - Continue"],
 
-    // Select the region that contains your time zone
-    ["<f2><wait>", "Continue"],
-
-    // Date and Time
-    ["<f2><wait>", "Continue"],
-
-    // Users
-    // System Root Password
     [var.root_password, "Root password"],
-    ["<down>"],
-    [var.root_password, "Confirm password"],
-    ["<down>"],
-
-    // Create a user account
-    ["<down>", "Your real name"],
+    ["<down>", "Move to confirm root password"],
+    [var.root_password, "Confirm root password"],
+    ["<down>", "Move to real name"],
+    ["<down>", "Skip real name"],
     [var.secondary_user_username, "Username"],
-    ["<down>"],
+    ["<down>", "Move to user password"],
     [var.secondary_user_password, "User password"],
-    ["<down>"],
-    [var.secondary_user_password, "Confirm password"],
-    ["<f2><wait>", "Continue"],
+    ["<down>", "Move to confirm user password"],
+    [var.secondary_user_password, "Confirm user password"],
+    ["<f2><wait>", "Users - Continue"],
 
-    // Install Summary
-    ["<f2><wait30m>", "Install"], # try 25m
+    ["<f2><wait30m>", "Install summary - Install"],
+    ["<f9><wait5s>", "Installation complete - Quit"],
 
-    // Installation Compelte
-    ["<f9><wait5s>", "Quit"],
-
-    // Welcome to OpenIndiana installation menu
-    ["3<enter><wait5s>", "Shell"],
-
-    // shell
-    ["curl -o /tmp/post_install.sh http://{{.HTTPIP}}:{{.HTTPPort}}/resources/post_install.sh<enter><wait10>"],
-    ["sh /tmp/post_install.sh && exit<enter><wait5>"],
-
-    // Welcome to OpenIndiana installation menu
-    ["5<enter>", "Reboot"],
+    ["3<enter><wait5s>", "Installation menu - Shell"],
+    ["curl -o /tmp/post_install.sh http://{{.HTTPIP}}:{{.HTTPPort}}/post_install.sh<enter><wait10>", "Download post install script"],
+    ["sh /tmp/post_install.sh && exit<enter><wait5>", "Run post install script"],
+    ["5<enter>", "Installation menu - Reboot"],
   ]
 
   ssh_username = "root"
@@ -181,16 +167,16 @@ source "qemu" "qemu" {
 
   qemuargs = concat(
     var.acceleration ? [["-accel", "kvm"], ["-accel", "hvf"], ["-accel", "tcg"]] : [],
-
+    var.qmp_socket == "" ? [] : [["-qmp", "unix:${var.qmp_socket},server=on,wait=off"]],
     [
       ["-cpu", var.cpu_type],
-      ["-boot", "strict=off"],
-      ["-monitor", "none"],
-      ["-device", "virtio-scsi-pci"],
-      ["-device", "virtio-blk,drive=drive0,bootindex=0"],
-      ["-device", "ide-cd,drive=drive1,bootindex=1"],
-      ["-drive", "if=none,file={{ .OutputDir }}/{{ .Name }},id=drive0,cache=writeback,discard=ignore,format=qcow2"],
-      ["-drive", "if=none,file=${local.iso_full_target_path},id=drive1,media=disk,format=raw,readonly=on"]
+
+      // UEFI ignores "-boot once=d", the default Packer passes. Boot the disk
+      // first, which falls through to the CD while the disk is still empty.
+      ["-device", "virtio-blk-pci,drive=drive0,bootindex=0"],
+      ["-device", "ide-cd,drive=cdrom0,bootindex=1"],
+      ["-drive", "if=none,id=drive0,file={{ .OutputDir }}/{{ .Name }},cache=writeback,discard=ignore,format=qcow2"],
+      ["-drive", "if=none,id=cdrom0,file=${local.iso_full_target_path},media=cdrom,readonly=on"]
     ]
   )
 
@@ -202,16 +188,16 @@ source "qemu" "qemu" {
     "https://dlc.openindiana.org/isos/hipster/${local.iso_os_version}/${local.image}"
   ]
 
-  http_directory = "."
+  http_directory = "resources"
   output_directory = "output"
-  shutdown_command = "/sbin/poweroff"
+  shutdown_command = "shutdown -i5 -g0 -y"
   vm_name = local.vm_name
 }
 
 packer {
   required_plugins {
     qemu = {
-      version = "~> 1.0.8"
+      version = "~> 1.1"
       source = "github.com/hashicorp/qemu"
     }
   }
@@ -220,10 +206,18 @@ packer {
 build {
   sources = ["qemu.qemu"]
 
-  /*provisioner "shell" {
+  provisioner "shell" {
     script = "resources/provision.sh"
     environment_vars = [
       "SECONDARY_USER=${var.secondary_user_username}"
     ]
-  }*/
+  }
+
+  provisioner "shell" {
+    script = "resources/custom.sh"
+  }
+
+  provisioner "shell" {
+    script = "resources/cleanup.sh"
+  }
 }
