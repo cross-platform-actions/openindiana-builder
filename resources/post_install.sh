@@ -1,13 +1,23 @@
 #!/bin/sh
 
-# Runs in the live environment of the installer, after the installation has
-# completed. It configures the installed boot environment, mounted at
-# $TARGET, so that Packer can connect as root over SSH after the reboot.
+# Runs in the background in the live environment of the installer. It's
+# started before the installation, waits for the installer to finish, then
+# configures the installed boot environment, mounted at $TARGET, so that
+# Packer can connect as root over SSH, and reboots into it.
 
 set -eux
 
 TARGET=/a
 BOOT_ENVIRONMENT=openindiana
+POOL=rpool
+
+# The last step of the installer marks the pool as ready. The pool doesn't
+# exist until the installer creates it.
+wait_for_installation() {
+  until [ "$(zfs get -H -o value org.openindiana.caiman:install "$POOL" 2>/dev/null)" = ready ]; do
+    sleep 10
+  done
+}
 
 mount_boot_environment() {
   if [ ! -d "$TARGET/etc" ]; then
@@ -43,8 +53,10 @@ unmount_boot_environment() {
   beadm unmount "$BOOT_ENVIRONMENT" || :
 }
 
+wait_for_installation
 mount_boot_environment
 make_root_a_normal_user
 configure_ssh
 grep '^root:' "$TARGET/etc/user_attr"
 unmount_boot_environment
+reboot

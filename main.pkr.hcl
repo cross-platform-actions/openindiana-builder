@@ -127,6 +127,15 @@ source "qemu" "qemu" {
     ["1<wait2m>", "Boot Multi User"],
     ["<enter><wait1m30s>", "Select keyboard layout"],
     ["<enter><wait2m30s>", "Select language"],
+
+    // The post install script waits in the background for the installation
+    // to finish, then configures the installed system and reboots into it.
+    // Packer then waits for SSH instead of for a fixed install time.
+    ["3<enter><wait5s>", "Installation menu - Shell"],
+    ["curl -o /tmp/post_install.sh http://{{.HTTPIP}}:{{.HTTPPort}}/post_install.sh<enter><wait10>", "Download post install script"],
+    ["nohup sh /tmp/post_install.sh > /tmp/post_install.log 2>&1 &<enter><wait>", "Start post install script"],
+    ["exit<enter><wait5s>", "Back to installation menu"],
+
     ["1<enter><wait30s>", "Install OpenIndiana"],
 
     ["<f2><wait10s>", "Welcome to OpenIndiana - Continue"],
@@ -152,13 +161,7 @@ source "qemu" "qemu" {
     [var.secondary_user_password, "Confirm user password"],
     ["<f2><wait>", "Users - Continue"],
 
-    ["<f2><wait30m>", "Install summary - Install"],
-    ["<f9><wait5s>", "Installation complete - Quit"],
-
-    ["3<enter><wait5s>", "Installation menu - Shell"],
-    ["curl -o /tmp/post_install.sh http://{{.HTTPIP}}:{{.HTTPPort}}/post_install.sh<enter><wait10>", "Download post install script"],
-    ["sh /tmp/post_install.sh && exit<enter><wait5>", "Run post install script"],
-    ["5<enter>", "Installation menu - Reboot"],
+    ["<f2>", "Install summary - Install"],
   ]
 
   ssh_username = "root"

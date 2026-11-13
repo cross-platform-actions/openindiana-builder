@@ -70,7 +70,10 @@ minimized.
 
 The installer is driven by typing into the VM console with fixed delays
 between the steps. On a slow host, for example when running without hardware
-acceleration, the delays might need to be increased.
+acceleration, the delays might need to be increased. The installation itself
+is not a fixed delay: `resources/post_install.sh` waits in the background
+until the installer marks the root pool as ready, then configures the
+installed system and reboots into it.
 
 The qcow2 format is chosen because unused space doesn't take up any space on
 disk, it's compressible and easily converts the raw format.
