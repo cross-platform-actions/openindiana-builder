@@ -2,9 +2,10 @@
 
 set -exu
 
-# pkg exits with 4 when there is nothing to do.
+# pkg exits with 4 when there is nothing to do. gnu-coreutils provides
+# whoami, which the minimal installation doesn't include.
 install_extra_packages() {
-  pkg install --accept bash curl rsync sudo || [ $? -eq 4 ]
+  pkg install --accept bash curl file/gnu-coreutils rsync sudo || [ $? -eq 4 ]
 }
 
 setup_sudo() {

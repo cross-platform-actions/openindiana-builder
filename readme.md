@@ -9,6 +9,7 @@ The following packages are installed as well:
 
 * bash
 * curl
+* GNU coreutils (for `whoami`)
 * rsync
 * sudo
 
