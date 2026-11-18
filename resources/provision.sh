@@ -30,8 +30,15 @@ set_hostname() {
   echo 'runnervmg1sw1.local' > /etc/nodename
 }
 
+# autofs mounts /home read-only, which prevents the action from creating the
+# work directory, `/home/runner/work/<repo>/<repo>`.
+disable_autofs() {
+  svcadm disable -s system/filesystem/autofs
+}
+
 install_extra_packages
 setup_sudo
 configure_boot_flags
 remove_secondary_user_password
 set_hostname
+disable_autofs
