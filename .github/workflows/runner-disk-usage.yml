@@ -1,0 +1,80 @@
+name: Runner disk usage
+
+# Measures how much of the runner's disk the VM's disk image takes: right after
+# the action unpacks it, after the VM writes data, and after the VM deletes it.
+# Compares a tar.zst bundle (OpenIndiana) with a qcow2 image (FreeBSD), which
+# the action converts to raw with `qemu-img convert`.
+
+on:
+  push:
+    branches: [test/runner-disk-usage]
+  workflow_dispatch:
+
+jobs:
+  measure:
+    name: ${{ matrix.os.name }} ${{ matrix.os.version }} (${{ matrix.os.format }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - { name: openindiana, version: '2026.10.30', format: tar.zst }
+          - { name: freebsd, version: '15.1', format: qcow2 }
+
+    steps:
+      - name: Install measuring script
+        run: |
+          cat > /tmp/measure.sh <<'EOF'
+          #!/bin/sh
+          set -eu
+          sync
+          echo "== $1"
+          for image in /tmp/resources*/disk.raw; do
+            [ -e "$image" ] || continue
+            echo "image:     $image"
+            echo "virtual:   $(du -h --apparent-size "$image" | cut -f1)"
+            echo "allocated: $(du -h "$image" | cut -f1)"
+          done
+          df -h / /mnt 2> /dev/null || df -h /
+          EOF
+          chmod +x /tmp/measure.sh
+          /tmp/measure.sh 'runner before the action'
+
+      - name: Start VM
+        uses: cross-platform-actions/action@master
+        with:
+          operating_system: ${{ matrix.os.name }}
+          version: ${{ matrix.os.version }}
+          architecture: x86-64
+          memory: 4G
+          sync_files: false
+          shutdown_vm: false
+
+      - name: Measure after boot
+        run: |
+          /tmp/measure.sh 'after the VM booted'
+          ls -la /tmp/resources*/ /home/runner/work/_temp/ || :
+
+      # Random data, so ZFS compression can't shrink it.
+      - name: Write 2 GiB in the VM
+        shell: cpa.sh {0} --sync-files none
+        run: |
+          df -h /
+          dd if=/dev/urandom of="$HOME/random.bin" bs=1048576 count=2048
+          sync
+          df -h /
+
+      - name: Measure after writing
+        run: /tmp/measure.sh 'after the VM wrote 2 GiB'
+
+      - name: Delete the 2 GiB in the VM
+        shell: cpa.sh {0} --sync-files none
+        run: |
+          rm "$HOME/random.bin"
+          sync
+          sleep 15
+          sync
+          df -h /
+
+      - name: Measure after deleting
+        run: /tmp/measure.sh 'after the VM deleted the 2 GiB'
