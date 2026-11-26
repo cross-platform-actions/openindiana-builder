@@ -1,42 +1,72 @@
 name: Runner disk usage
 
-# Measures how much of the runner's disk the VM's disk image takes: right after
-# the action unpacks it, after the VM writes data, and after the VM deletes it.
-# Compares a tar.zst bundle (OpenIndiana) with a qcow2 image (FreeBSD), which
-# the action converts to raw with `qemu-img convert`.
+# Test branch only, not meant to be merged.
+#
+# platforms: how much disk each platform's image uses up front, both on the
+# runner (download, unpacked image) and inside the VM (free space, swap).
+#
+# openindiana-install: the dependency install from
+# cross-platform-actions/action#172, on the published OpenIndiana image grown
+# to 24 GB on the runner, measuring how much runner disk it really takes.
 
 on:
   push:
     branches: [test/runner-disk-usage]
   workflow_dispatch:
 
+env:
+  MEASURE: |
+    #!/bin/sh
+    set -eu
+    sync
+    echo "== $1"
+    find /home/runner/work/_temp -maxdepth 1 -type f -size +50M |
+    while read -r file; do
+      echo "download:  $(du -m --apparent-size "$file" | cut -f1) MiB $file"
+    done
+    find /home/runner/work/_temp /tmp -name disk.raw 2> /dev/null |
+    while read -r image; do
+      echo "image:     $image"
+      echo "virtual:   $(du -m --apparent-size "$image" | cut -f1) MiB"
+      echo "allocated: $(du -m "$image" | cut -f1) MiB"
+    done
+    df -m --output=target,size,used,avail /
+
+  GUEST_REPORT: |
+    sudo=$(command -v sudo || :)
+    uname -a
+    df -k / 2> /dev/null || df
+    if command -v zfs > /dev/null; then
+      $sudo zpool list
+      $sudo zfs list -t all -o name,used,avail,refer,volsize,refreservation,compressratio
+    fi
+    if command -v swap > /dev/null; then $sudo swap -l || :
+    elif command -v swapctl > /dev/null; then $sudo swapctl -l || :
+    elif command -v swapinfo > /dev/null; then swapinfo -m || :
+    fi
+
 jobs:
-  measure:
-    name: ${{ matrix.os.name }} ${{ matrix.os.version }} (${{ matrix.os.format }})
+  platforms:
+    name: ${{ matrix.os.name }} ${{ matrix.os.version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os:
-          - { name: openindiana, version: '2026.10.30', format: tar.zst }
-          - { name: freebsd, version: '15.1', format: qcow2 }
+          - { name: openindiana, version: '2026.10.30' }
+          - { name: omnios, version: r151060 }
+          - { name: freebsd, version: '15.1' }
+          - { name: openbsd, version: '8.0' }
+          - { name: netbsd, version: '11.1' }
+          - { name: dragonflybsd, version: 6.4.2 }
+          - { name: midnightbsd, version: 4.0.4 }
+          - { name: haiku, version: r1beta6 }
 
     steps:
       - name: Install measuring script
         run: |
-          cat > /tmp/measure.sh <<'EOF'
-          #!/bin/sh
-          set -eu
-          sync
-          echo "== $1"
-          find /home/runner/work/_temp /tmp -name disk.raw 2> /dev/null |
-          while read -r image; do
-            echo "image:     $image"
-            echo "virtual:   $(du -m --apparent-size "$image" | cut -f1) MiB"
-            echo "allocated: $(du -m "$image" | cut -f1) MiB"
-          done
-          df -m --output=target,size,used,avail /
-          EOF
+          printf '%s' "$MEASURE" > /tmp/measure.sh
           chmod +x /tmp/measure.sh
           /tmp/measure.sh 'runner before the action'
 
@@ -46,35 +76,88 @@ jobs:
           operating_system: ${{ matrix.os.name }}
           version: ${{ matrix.os.version }}
           architecture: x86-64
-          memory: 4G
           sync_files: false
           shutdown_vm: false
 
-      - name: Measure after boot
+      - name: Measure runner after boot
+        run: /tmp/measure.sh 'after the VM booted'
+
+      - name: Report disk inside the VM
+        shell: cpa.sh {0} --sync-files none
+        run: ${{ env.GUEST_REPORT }}
+
+  openindiana-install:
+    name: openindiana install (24 GB disk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Install measuring script
         run: |
+          printf '%s' "$MEASURE" > /tmp/measure.sh
+          chmod +x /tmp/measure.sh
+          /tmp/measure.sh 'runner before the action'
+
+      # Grows the published image's disk to 24 GB without allocating anything:
+      # the new space is a hole, and the bundle is re-archived sparse.
+      - name: Build grown image and serve it
+        run: |
+          mkdir -p /tmp/grown/bundle
+          cd /tmp/grown
+          curl -fsSL -o original.tar.zst \
+            https://github.com/cross-platform-actions/openindiana-builder/releases/download/v0.0.1/openindiana-2026.10.30-x86-64.tar.zst
+          zstd -dc original.tar.zst | tar -x -C bundle -f -
+          truncate -s 24G bundle/disk.img
+          tar --sparse -C bundle -cf - disk.img | zstd -3 -T0 -o grown.tar.zst
+          rm -rf bundle original.tar.zst
+          ls -l
+          nohup python3 -m http.server 8000 -d /tmp/grown > /tmp/http.log 2>&1 &
+          sleep 2
+          curl -fsI http://localhost:8000/grown.tar.zst
+
+      - name: Start VM
+        uses: cross-platform-actions/action@master
+        with:
+          operating_system: openindiana
+          version: '2026.10.30'
+          architecture: x86-64
+          memory: 4G
+          image_url: http://localhost:8000/grown.tar.zst
+          sync_files: false
+          shutdown_vm: false
+
+      - name: Remove served image
+        run: |
+          rm -rf /tmp/grown
           /tmp/measure.sh 'after the VM booted'
-          ls -la /tmp/resources*/ /home/runner/work/_temp/ || :
 
-      # Random data, so ZFS compression can't shrink it.
-      - name: Write 2 GiB in the VM
+      - name: Expand the pool to the grown disk
         shell: cpa.sh {0} --sync-files none
         run: |
-          df -h /
-          dd if=/dev/urandom of="$HOME/random.bin" bs=1048576 count=2048
-          sync
-          df -h /
+          set -x
+          sudo zpool status rpool
+          disk=$(sudo zpool list -v -H rpool | awk 'NR == 2 { print $1 }')
+          sudo zpool online -e rpool "$disk"
+          sudo zpool list
+          df -k /
 
-      - name: Measure after writing
-        run: /tmp/measure.sh 'after the VM wrote 2 GiB'
+      - name: Measure runner after expanding
+        run: /tmp/measure.sh 'after expanding the pool'
 
-      - name: Delete the 2 GiB in the VM
+      - name: Report disk inside the VM before installing
+        shell: cpa.sh {0} --sync-files none
+        run: ${{ env.GUEST_REPORT }}
+
+      - name: Install the dependencies from issue 172
         shell: cpa.sh {0} --sync-files none
         run: |
-          rm "$HOME/random.bin"
-          sync
-          sleep 15
-          sync
-          df -h /
+          time sudo pkg install --accept metapackages/build-essential developer/versioning/subversion developer/versioning/git text/gawk developer/build/gnu-make developer/build/pkg-config audio/mpg123 library/libogg library/libvorbis codec/flac library/libsndfile library/sdl2 developer/build/autoconf developer/build/autoconf-archive developer/build/automake developer/build/libtool library/libtool/libltdl developer/build/help2man developer/documentation-tool/doxygen library/audio/pulseaudio
 
-      - name: Measure after deleting
-        run: /tmp/measure.sh 'after the VM deleted the 2 GiB'
+      - name: Report disk inside the VM after installing
+        shell: cpa.sh {0} --sync-files none
+        run: |
+          ${{ env.GUEST_REPORT }}
+          sudo du -sh /var/pkg /var/pkg/publisher 2> /dev/null || :
+
+      - name: Measure runner after installing
+        run: /tmp/measure.sh 'after installing the dependencies'
