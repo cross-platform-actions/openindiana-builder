@@ -2,6 +2,12 @@
 
 set -exu
 
+# By default pkg keeps the downloaded packages after installing them: 1.8 GB
+# after installing a typical set of build dependencies.
+flush_package_cache_after_install() {
+  pkg set-property flush-content-cache-on-success True
+}
+
 # pkg exits with 4 when there is nothing to do. gnu-coreutils provides
 # whoami, which the minimal installation doesn't include.
 install_extra_packages() {
@@ -36,6 +42,7 @@ disable_autofs() {
   svcadm disable -s system/filesystem/autofs
 }
 
+flush_package_cache_after_install
 install_extra_packages
 setup_sudo
 configure_boot_flags

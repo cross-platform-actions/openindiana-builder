@@ -33,8 +33,13 @@ variable "cpus" {
   description = "The number of cpus to use when building the VM"
 }
 
+# The runner only stores what the VM writes, as the image is sparse. The size is
+# for pkg, which refuses to install unless the free space covers 1.25 times the
+# uncompressed size of the packages plus their downloads, ignoring compression:
+# installing a typical set of build dependencies asks for about 10 GB and uses
+# less than half of that.
 variable "disk_size" {
-  default = "12G"
+  default = "24G"
   type = string
   description = "The size in bytes of the hard disk of the VM"
 }

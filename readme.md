@@ -80,7 +80,7 @@ measured numbers are in
 
 The unused space of the pool is zero-filled before the image is archived, and
 the zero ranges are turned into actual holes, which the tar records rather than
-the zeroes in them. Neither end has to read or write the full 12 GB, only the
+the zeroes in them. Neither end has to read or write the full 24 GB, only the
 space the installation uses. The compression window is kept at zstd's default
 decompression limit, so no extra flags are needed to unpack it:
 
