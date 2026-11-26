@@ -29,13 +29,13 @@ jobs:
           set -eu
           sync
           echo "== $1"
-          for image in /tmp/resources*/disk.raw; do
-            [ -e "$image" ] || continue
+          find /home/runner/work/_temp /tmp -name disk.raw 2> /dev/null |
+          while read -r image; do
             echo "image:     $image"
-            echo "virtual:   $(du -h --apparent-size "$image" | cut -f1)"
-            echo "allocated: $(du -h "$image" | cut -f1)"
+            echo "virtual:   $(du -m --apparent-size "$image" | cut -f1) MiB"
+            echo "allocated: $(du -m "$image" | cut -f1) MiB"
           done
-          df -h / /mnt 2> /dev/null || df -h /
+          df -m --output=target,size,used,avail /
           EOF
           chmod +x /tmp/measure.sh
           /tmp/measure.sh 'runner before the action'
