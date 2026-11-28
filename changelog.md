@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- GCC 14, OpenIndiana's default system compiler
+- GCC 14, OpenIndiana's default system compiler, also available as `cc`
 
 ### Changed
 - Increase the disk to 256 GB, more than a runner has free, so `pkg` has room to

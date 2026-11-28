@@ -9,7 +9,7 @@ The following packages are installed as well:
 
 * bash
 * curl
-* GCC 14, the default system compiler (`gcc`, `g++`)
+* GCC 14, the default system compiler (`gcc`, `g++`, and `cc` linked to `gcc`)
 * GNU coreutils (for `whoami`)
 * rsync
 * sudo

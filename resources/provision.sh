@@ -17,6 +17,13 @@ install_extra_packages() {
     sudo || [ $? -eq 4 ]
 }
 
+# Other platforms provide the system C compiler as `cc`, which build systems
+# fall back to. No OpenIndiana package delivers it. A link rather than a
+# script, so it follows the gcc mediator if the default version changes.
+link_cc_to_gcc() {
+  ln -s gcc /usr/bin/cc
+}
+
 setup_sudo() {
   cat <<EOF > "/etc/sudoers.d/$SECONDARY_USER"
 Defaults:$SECONDARY_USER !requiretty
@@ -47,6 +54,7 @@ disable_autofs() {
 
 flush_package_cache_after_install
 install_extra_packages
+link_cc_to_gcc
 setup_sudo
 configure_boot_flags
 remove_secondary_user_password
