@@ -2,8 +2,8 @@ name: Runner disk usage
 
 # Test branch only, not meant to be merged.
 #
-# Builds the image from the more-disk-space branch (24 GB disk, GCC 14, pkg
-# flushing its downloads), boots it, checks the compiler and runs the
+# Builds the image from the more-disk-space branch (256 GB disk, GCC 14 with
+# cc, pkg flushing its downloads), boots it, checks the compiler and runs the
 # dependency install from cross-platform-actions/action#172, measuring the
 # disk both inside the VM and on the runner.
 
@@ -120,14 +120,18 @@ jobs:
         shell: cpa.sh {0} --sync-files none
         run: |
           set -x
-          command -v gcc g++ cpp cc || :
-          gcc --version
+          ls -l /usr/bin/cc /usr/bin/c++ /usr/bin/gcc /usr/bin/g++
+          cc --version
+          c++ --version
           cd "$(mktemp -d)"
           printf '#include <stdio.h>\nint main(void) { puts("hello from C"); return 0; }\n' > hello.c
           printf '#include <iostream>\nint main() { std::cout << "hello from C++" << std::endl; }\n' > hello.cpp
-          gcc -Wall -o hello hello.c && ./hello
-          g++ -Wall -o hellopp hello.cpp && ./hellopp
-          gcc -m32 -o hello32 hello.c && ./hello32 && file hello32 || echo '32-bit build failed'
+          cc -Wall -o hello hello.c && ./hello
+          c++ -Wall -o hellopp hello.cpp && ./hellopp
+          gcc -Wall -o hello-gcc hello.c && ./hello-gcc
+          g++ -Wall -o hellopp-gpp hello.cpp && ./hellopp-gpp
+          file hello hellopp
+          cc -m32 -o hello32 hello.c && ./hello32 && file hello32 || echo '32-bit build failed'
 
       - name: Install the dependencies from issue 172
         shell: cpa.sh {0} --sync-files none
