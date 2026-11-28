@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- GCC 14, OpenIndiana's default system compiler
+
 ### Changed
 - Increase the disk to 24 GB, so `pkg` has room to install build dependencies
     ([action#172](https://github.com/cross-platform-actions/action/issues/172))

@@ -9,9 +9,12 @@ flush_package_cache_after_install() {
 }
 
 # pkg exits with 4 when there is nothing to do. gnu-coreutils provides
-# whoami, which the minimal installation doesn't include.
+# whoami, which the minimal installation doesn't include. gcc-14 is the
+# version OpenIndiana builds its own packages with, and brings the system
+# headers, linker and binutils.
 install_extra_packages() {
-  pkg install --accept bash curl file/gnu-coreutils rsync sudo || [ $? -eq 4 ]
+  pkg install --accept bash curl developer/gcc-14 file/gnu-coreutils rsync \
+    sudo || [ $? -eq 4 ]
 }
 
 setup_sudo() {
