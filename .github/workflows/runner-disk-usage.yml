@@ -2,12 +2,10 @@ name: Runner disk usage
 
 # Test branch only, not meant to be merged.
 #
-# platforms: how much disk each platform's image uses up front, both on the
-# runner (download, unpacked image) and inside the VM (free space, swap).
-#
-# openindiana-install: the dependency install from
-# cross-platform-actions/action#172, on the published OpenIndiana image grown
-# to 24 GB on the runner, measuring how much runner disk it really takes.
+# Builds the image from the more-disk-space branch (24 GB disk, GCC 14, pkg
+# flushing its downloads), boots it, checks the compiler and runs the
+# dependency install from cross-platform-actions/action#172, measuring the
+# disk both inside the VM and on the runner.
 
 on:
   push:
@@ -40,80 +38,61 @@ env:
       $sudo zpool list
       $sudo zfs list -t all -o name,used,avail,refer,volsize,refreservation,compressratio
     fi
-    if command -v swap > /dev/null; then $sudo swap -l || :
-    elif command -v swapctl > /dev/null; then $sudo swapctl -l || :
-    elif command -v swapinfo > /dev/null; then swapinfo -m || :
-    fi
+    $sudo swap -l || :
+    $sudo swap -s || :
+    $sudo dumpadm || :
+    svcs -xv || :
 
 jobs:
-  platforms:
-    name: ${{ matrix.os.name }} ${{ matrix.os.version }}
+  openindiana:
+    name: openindiana (more-disk-space build)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - { name: openindiana, version: '2026.10.30' }
-          - { name: omnios, version: r151060 }
-          - { name: freebsd, version: '15.1' }
-          - { name: openbsd, version: '8.0' }
-          - { name: netbsd, version: '11.1' }
-          - { name: dragonflybsd, version: 6.4.2 }
-          - { name: midnightbsd, version: 4.0.4 }
-          - { name: haiku, version: r1beta6 }
+    timeout-minutes: 150
 
     steps:
       - name: Install measuring script
         run: |
           printf '%s' "$MEASURE" > /tmp/measure.sh
           chmod +x /tmp/measure.sh
-          /tmp/measure.sh 'runner before the action'
+          /tmp/measure.sh 'runner before the build'
 
-      - name: Start VM
-        uses: cross-platform-actions/action@master
+      - name: Clone the builder at the more-disk-space branch
+        uses: actions/checkout@v6.1.0
         with:
-          operating_system: ${{ matrix.os.name }}
-          version: ${{ matrix.os.version }}
-          architecture: x86-64
-          sync_files: false
-          shutdown_vm: false
+          ref: more-disk-space
+          persist-credentials: false
 
-      - name: Measure runner after boot
-        run: /tmp/measure.sh 'after the VM booted'
-
-      - name: Report disk inside the VM
-        shell: cpa.sh {0} --sync-files none
-        run: ${{ env.GUEST_REPORT }}
-
-  openindiana-install:
-    name: openindiana install (24 GB disk)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-
-    steps:
-      - name: Install measuring script
+      - name: Install build dependencies
         run: |
-          printf '%s' "$MEASURE" > /tmp/measure.sh
-          chmod +x /tmp/measure.sh
-          /tmp/measure.sh 'runner before the action'
+          sudo apt update
+          sudo apt install -y curl qemu-system-x86 qemu-utils zstd
 
-      # Grows the published image's disk to 24 GB without allocating anything:
-      # the new space is a hole, and the bundle is re-archived sparse.
-      - name: Build grown image and serve it
+      - name: Set permissions to allow using KVM
         run: |
-          mkdir -p /tmp/grown/bundle
-          cd /tmp/grown
-          curl -fsSL -o original.tar.zst \
-            https://github.com/cross-platform-actions/openindiana-builder/releases/download/v0.0.1/openindiana-2026.10.30-x86-64.tar.zst
-          zstd -dc original.tar.zst | tar -x -C bundle -f -
-          truncate -s 24G bundle/disk.img
-          tar --sparse -C bundle -cf - disk.img | zstd -3 -T0 -o grown.tar.zst
-          rm -rf bundle original.tar.zst
-          ls -l
-          nohup python3 -m http.server 8000 -d /tmp/grown > /tmp/http.log 2>&1 &
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: hashicorp/setup-packer@v3.4.0
+        with:
+          version: '1.14.2'
+
+      - name: Build image
+        run: |
+          git log --oneline -3
+          ./build.sh 2026.10.30 x86-64 -var 'headless=true'
+
+      - name: Serve image
+        run: |
+          mkdir -p /tmp/served
+          mv output/openindiana-2026.10.30-x86-64.tar.zst /tmp/served/
+          rm -rf output packer_cache
+          ls -l /tmp/served
+          nohup python3 -m http.server 8000 -d /tmp/served > /tmp/http.log 2>&1 &
           sleep 2
-          curl -fsI http://localhost:8000/grown.tar.zst
+          curl -fsI http://localhost:8000/openindiana-2026.10.30-x86-64.tar.zst
+          /tmp/measure.sh 'after the build'
 
       - name: Start VM
         uses: cross-platform-actions/action@master
@@ -121,32 +100,34 @@ jobs:
           operating_system: openindiana
           version: '2026.10.30'
           architecture: x86-64
-          memory: 4G
-          image_url: http://localhost:8000/grown.tar.zst
+          image_url: http://localhost:8000/openindiana-2026.10.30-x86-64.tar.zst
           sync_files: false
           shutdown_vm: false
 
-      - name: Remove served image
+      - name: Measure runner after boot
         run: |
-          rm -rf /tmp/grown
+          rm -rf /tmp/served
           /tmp/measure.sh 'after the VM booted'
 
-      - name: Expand the pool to the grown disk
+      - name: Report disk inside the VM after boot
+        shell: cpa.sh {0} --sync-files none
+        run: |
+          ${{ env.GUEST_REPORT }}
+          sudo pkg property flush-content-cache-on-success
+          sudo du -sh /var/pkg /var/pkg/publisher
+
+      - name: Compile with the system compiler
         shell: cpa.sh {0} --sync-files none
         run: |
           set -x
-          sudo zpool status rpool
-          disk=$(sudo zpool list -v -H rpool | awk 'NR == 2 { print $1 }')
-          sudo zpool online -e rpool "$disk"
-          sudo zpool list
-          df -k /
-
-      - name: Measure runner after expanding
-        run: /tmp/measure.sh 'after expanding the pool'
-
-      - name: Report disk inside the VM before installing
-        shell: cpa.sh {0} --sync-files none
-        run: ${{ env.GUEST_REPORT }}
+          command -v gcc g++ cpp cc || :
+          gcc --version
+          cd "$(mktemp -d)"
+          printf '#include <stdio.h>\nint main(void) { puts("hello from C"); return 0; }\n' > hello.c
+          printf '#include <iostream>\nint main() { std::cout << "hello from C++" << std::endl; }\n' > hello.cpp
+          gcc -Wall -o hello hello.c && ./hello
+          g++ -Wall -o hellopp hello.cpp && ./hellopp
+          gcc -m32 -o hello32 hello.c && ./hello32 && file hello32 || echo '32-bit build failed'
 
       - name: Install the dependencies from issue 172
         shell: cpa.sh {0} --sync-files none
@@ -157,7 +138,7 @@ jobs:
         shell: cpa.sh {0} --sync-files none
         run: |
           ${{ env.GUEST_REPORT }}
-          sudo du -sh /var/pkg /var/pkg/publisher 2> /dev/null || :
+          sudo du -sh /var/pkg /var/pkg/publisher
 
       - name: Measure runner after installing
         run: /tmp/measure.sh 'after installing the dependencies'

@@ -7,7 +7,9 @@ workflows:
         - 'actions/checkout@v6.1.0'
         - 'hashicorp/setup-packer@v3.4.0'
     '.github/workflows/runner-disk-usage.yml':
+        - 'actions/checkout@v6.1.0'
         - 'cross-platform-actions/action@master'
+        - 'hashicorp/setup-packer@v3.4.0'
 dependencies:
     'actions/checkout@v6.1.0':
         ref: 'v6.1.0'
