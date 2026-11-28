@@ -50,6 +50,13 @@ variable "checksum" {
   description = "The checksum for the virtual hard drive file"
 }
 
+# The version OpenIndiana builds its own packages with, which differs between
+# releases. Set per release in var_files/<version>/common.pkrvars.hcl.
+variable "gcc_version" {
+  type = string
+  description = "The version of GCC to install as the system compiler"
+}
+
 variable "root_password" {
   default = "vagrant"
   type = string
@@ -224,7 +231,8 @@ build {
   provisioner "shell" {
     script = "resources/provision.sh"
     environment_vars = [
-      "SECONDARY_USER=${var.secondary_user_username}"
+      "SECONDARY_USER=${var.secondary_user_username}",
+      "GCC_VERSION=${var.gcc_version}"
     ]
   }
 

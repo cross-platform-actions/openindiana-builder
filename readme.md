@@ -9,7 +9,8 @@ The following packages are installed as well:
 
 * bash
 * curl
-* GCC 14, the default system compiler (`gcc`, `g++`, and `cc` linked to `gcc`)
+* GCC, the system compiler, in the version OpenIndiana builds its own packages
+    with (14 for 2026.10.30): `gcc`, `g++`, and `cc` linked to `gcc`
 * GNU coreutils (for `whoami`)
 * rsync
 * sudo
