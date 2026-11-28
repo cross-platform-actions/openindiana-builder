@@ -26,8 +26,17 @@ remove_dump_device() {
 # has less free space than the disk is large.
 minimize_disk() {
   zpool trim rpool
-  zpool wait -t trim rpool
+  wait_for_trim
+}
+
+# illumos' `zpool wait` can't wait for a trim. Fails unless the trim completed,
+# for example when the disk doesn't support it.
+wait_for_trim() {
+  while zpool status -t rpool | grep -q 'trimmed, started at'; do
+    sleep 5
+  done
   zpool status -t rpool
+  zpool status -t rpool | grep -q '100% trimmed, completed at'
 }
 
 cleanup
