@@ -20,16 +20,6 @@ remove_dump_device() {
   zfs destroy rpool/dump
 }
 
-# The installer creates a 2 GB swap volume, whose reservation takes 2 GB of the
-# pool. Like OmniOS, the VM does without swap.
-remove_swap_device() {
-  swap -d /dev/zvol/dsk/rpool/swap
-  grep -v '^/dev/zvol/dsk/rpool/swap' /etc/vfstab > /tmp/vfstab
-  cp /tmp/vfstab /etc/vfstab
-  rm /tmp/vfstab
-  zfs destroy rpool/swap
-}
-
 # Fills the unused space of the pool with zeros, which build.sh turns into
 # holes before archiving the image.
 minimize_disk() {
@@ -48,5 +38,4 @@ wait_for_initialize() {
 cleanup
 destroy_install_snapshots
 remove_dump_device
-remove_swap_device
 minimize_disk

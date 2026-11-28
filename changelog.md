@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Increase the disk to 24 GB, so `pkg` has room to install build dependencies
     ([action#172](https://github.com/cross-platform-actions/action/issues/172))
-- Remove the 2 GB swap volume, which took space from the root file system
 - Remove downloaded packages after a successful `pkg install`
 
 ## [0.0.1] - 2026-11-23
