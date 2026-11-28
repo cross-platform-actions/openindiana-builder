@@ -33,13 +33,14 @@ variable "cpus" {
   description = "The number of cpus to use when building the VM"
 }
 
-# The runner only stores what the VM writes, as the image is sparse. The size is
-# for pkg, which refuses to install unless the free space covers 1.25 times the
-# uncompressed size of the packages plus their downloads, ignoring compression:
-# installing a typical set of build dependencies asks for about 10 GB and uses
-# less than half of that.
+# Larger than the free space of a GitHub-hosted runner, so a job runs out of
+# space on the runner before it does in the VM. The image is sparse, so the
+# runner only stores what the VM writes. pkg in particular refuses to install
+# unless the free space covers 1.25 times the uncompressed size of the packages
+# plus their downloads, ignoring compression: installing a typical set of build
+# dependencies asks for about 10 GB and uses less than half of that.
 variable "disk_size" {
-  default = "24G"
+  default = "256G"
   type = string
   description = "The size in bytes of the hard disk of the VM"
 }
@@ -184,9 +185,12 @@ source "qemu" "qemu" {
       // ZFS records the device path of the pool, and when it changes, the boot
       // scans every device for the pool, which can make the boot-archive
       // service time out without hardware acceleration.
+      //
+      // `discard=unmap` turns the guest's TRIM into holes in the image, see
+      // resources/cleanup.sh.
       ["-device", "virtio-blk-pci,drive=drive0,bootindex=0,addr=0x02"],
       ["-device", "ide-cd,drive=cdrom0,bootindex=1"],
-      ["-drive", "if=none,id=drive0,file={{ .OutputDir }}/{{ .Name }},cache=writeback,discard=ignore,format=raw"],
+      ["-drive", "if=none,id=drive0,file={{ .OutputDir }}/{{ .Name }},cache=writeback,discard=unmap,format=raw"],
       ["-drive", "if=none,id=cdrom0,file=${local.iso_full_target_path},media=cdrom,readonly=on"]
     ]
   )

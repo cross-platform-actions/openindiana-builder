@@ -20,19 +20,14 @@ remove_dump_device() {
   zfs destroy rpool/dump
 }
 
-# Fills the unused space of the pool with zeros, which build.sh turns into
-# holes before archiving the image.
+# Trims the unused space of the pool, which QEMU turns into holes in the image,
+# so neither the build nor the action stores more than the installation uses.
+# Writing zeros instead would fully allocate the image on the build host, which
+# has less free space than the disk is large.
 minimize_disk() {
-  mdb -kwe 'zfs_initialize_value/z0'
-  zpool initialize rpool
-  wait_for_initialize
-}
-
-wait_for_initialize() {
-  while zpool status rpool | grep -q '(initializing)'; do
-    sleep 10
-  done
-  zpool status rpool
+  zpool trim rpool
+  zpool wait -t trim rpool
+  zpool status -t rpool
 }
 
 cleanup

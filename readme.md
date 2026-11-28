@@ -79,11 +79,13 @@ solid stream does, and a consumer pays that difference on every job. The
 measured numbers are in
 [action#151](https://github.com/cross-platform-actions/action/issues/151).
 
-The unused space of the pool is zero-filled before the image is archived, and
-the zero ranges are turned into actual holes, which the tar records rather than
-the zeroes in them. Neither end has to read or write the full 24 GB, only the
-space the installation uses. The compression window is kept at zstd's default
-decompression limit, so no extra flags are needed to unpack it:
+The disk is 256 GB, larger than the free space of a GitHub-hosted runner, so a
+job runs out of space on the runner before it does in the VM. The image is
+sparse: the unused space of the pool is trimmed into holes before the image is
+archived, and the tar records the holes rather than zeroes. Neither end has to
+read or write the full 256 GB, only the space the installation uses. The
+compression window is kept at zstd's default decompression limit, so no extra
+flags are needed to unpack it:
 
 ```
 curl -sL <url>/openindiana-<version>-<architecture>.tar.zst | zstd -dc | tar -x

@@ -5,11 +5,10 @@ set -eux
 OS_VERSION="$1"; shift
 ARCHITECTURE="$1"; shift
 
-# Turn the image's zero ranges into holes, which is what makes `tar --sparse`
-# worth asking for: tar uses SEEK_HOLE rather than looking for zeroes itself,
-# and the image arrives from the builder fully allocated, so it finds none and
-# archives all 24 GB. resources/cleanup.sh zero-fills the unused space of the
-# pool, so digging takes both ends down to the space the installation uses.
+# Turn the image's remaining zero ranges into holes. tar uses SEEK_HOLE rather
+# than looking for zeroes itself, so only holes stay out of the archive.
+# resources/cleanup.sh already trims the unused space of the pool into holes;
+# this catches the zeroes the installation itself wrote.
 #
 # `fallocate` is Linux-only and works in place. Elsewhere a raw-to-raw qemu-img
 # conversion skips the zero blocks and so writes a sparse file.
@@ -35,7 +34,7 @@ bundle_image() {
   raw="output/openindiana-$OS_VERSION-$ARCHITECTURE.img"
   bundle="output/openindiana-$OS_VERSION-$ARCHITECTURE.tar.zst"
 
-  # Staged inside output/ so that renaming a 24 GB file stays a rename rather
+  # Staged inside output/ so that renaming a 256 GB file stays a rename rather
   # than becoming a copy onto another file system.
   rm -rf output/bundle
   mkdir -p output/bundle

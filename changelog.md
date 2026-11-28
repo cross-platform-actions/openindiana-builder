@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GCC 14, OpenIndiana's default system compiler
 
 ### Changed
-- Increase the disk to 24 GB, so `pkg` has room to install build dependencies
+- Increase the disk to 256 GB, more than a runner has free, so `pkg` has room to
+    install build dependencies
     ([action#172](https://github.com/cross-platform-actions/action/issues/172))
 - Remove downloaded packages after a successful `pkg install`
 
